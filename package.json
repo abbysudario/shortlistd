@@ -1,0 +1,15 @@
+{
+  "name": "shortlistd",
+  "version": "1.0.0",
+  "description": "Cuts job search noise by fetching listings daily, scoring them with AI, and showing only the matches that meet the bar.",
+  "main": "dist/index.js",
+  "scripts": {
+    "start": "ts-node src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.2"
+  }
+}
