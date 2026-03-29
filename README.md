@@ -1,6 +1,6 @@
 # 🎯 Shortlistd
 
-> A personal job search automation engine that fetches listings daily, scores them against a resume using AI, and surfaces only the matches worth looking at.
+> Cuts job search noise by fetching listings daily, scoring them with AI, and showing only the matches that meet the bar.
 
 ---
 
@@ -54,21 +54,30 @@ GitHub Actions (cron: daily)
         │
         ▼ JobPosting[] (normalized, typed)
         │
+   Deduplication Layer (storage.ts)
+   └── Filter out already-seen externalIds
+       Only new jobs proceed to scoring
+        │
+        ▼ JobPosting[] (new only)
+        │
    matcher.ts
    └── Mistral (mistral-small-latest)
        System prompt: resume baseline
        User message: job description
        Output: { score: number, reasons: string[], gaps: string[] }
         │
-        ▼ ScoredJob[] (score >= 75 only)
+        ▼ ScoredJob[] (all jobs scored)
         │
    storage.ts
    └── Supabase (Postgres)
+       Single table: all scored jobs stored regardless of score
         │
         ▼
    dashboard/index.html
    └── Vanilla JS, reads from Supabase
-       Displays: title, company, source, score, reasons, apply link
+       Two sections:
+       ├── Matched Jobs (score >= 75)
+       └── All Jobs (everything fetched today)
 ```
 
 ---
@@ -77,21 +86,35 @@ GitHub Actions (cron: daily)
 
 ### Why fetch from ATS platforms directly instead of using an aggregator?
 
-Aggregators like LinkedIn and Indeed are designed for job seekers, which means they're also optimized for engagement, not data quality. They deduplicate inconsistently, surface promoted listings out of relevance order, and gate their APIs behind enterprise pricing or scraping terms of service violations.
+Aggregators like LinkedIn and Indeed are designed for job seekers, which means they're also optimized for engagement, not data quality. They deduplicate inconsistently, surface promoted listings out of relevance order, and gate their APIs behind enterprise pricing or terms of service violations.
 
 Greenhouse, Ashby, Lever, and SmartRecruiters all expose public job board APIs that are free, stable, and return structured JSON. No scraping. No rate limit games. Clean data from the source.
 
 The tradeoff: coverage is limited to companies using these four ATS platforms. That's an acceptable constraint for a focused search targeting companies that tend to use modern hiring infrastructure.
 
+### Why query broadly at the ATS level and let Mistral filter?
+
+Filtering strictly by job title at the fetch level would miss real matches. "Quality Assurance Engineer", "Software Engineer in Test", "SDET", and "Test Engineer" can all describe the same role. The fetchers query on broad keywords like "quality", "QA", and "test" to cast a wide net. Mistral scores everything against the full resume baseline and the 75% threshold does the real filtering work. Title matching is a blunt instrument. Semantic matching against a full job description is the sharp one.
+
 ### Why Mistral for scoring, not Claude?
 
 Two reasons: cost and fit.
 
-At daily fetches of 100 to 200 job listings, using Claude for scoring would burn through Anthropic credits fast. Mistral's free tier on la Plateforme covers this volume at effectively $0.
+At daily fetches of 100 to 200 job listings, using Claude for scoring would burn through Anthropic credits fast. Mistral's free tier on la Plateforme covers this volume at effectively $0. At realistic volumes of 20 to 50 new jobs per day after deduplication, the monthly cost on Mistral's paid tier is approximately $0.14. Effectively still $0.
 
 More importantly, scoring is a structured pattern-matching task. Does this job description match this resume? It doesn't require Claude's depth. It requires a consistent, typed JSON output and reliable reasoning against a fixed baseline. Mistral `mistral-small-latest` does this well and is already in the stack from QA Signal Hub.
 
 Claude is reserved for Phase 2 package generation, a genuinely different task (creative writing, tone-matching, structured argumentation) where its behavior is already tuned and producing quality output in Aligned.
+
+### Why score every job instead of filtering before scoring?
+
+Every fetched job gets scored regardless of title or apparent relevance. This decision was made for two reasons. First, it provides full job visibility in the dashboard: both a "Matched Jobs" section (score >= 75%) and an "All Jobs" section showing everything fetched. Seeing what the AI filtered out and why is useful signal. Second, it simplifies the architecture: one table in Supabase, one data shape, one scoring pass. The dashboard filters the view, not the data.
+
+### Why day-over-day deduplication using externalId?
+
+Every ATS platform assigns a unique ID to each job posting. Before scoring, the pipeline checks whether that ID already exists in Supabase. If it does, the job is skipped entirely. No Mistral call, no storage write. This prevents the same posting from being scored and stored repeatedly across daily runs, keeps token usage lean, and ensures the dashboard reflects genuinely new listings each day.
+
+Cross-platform deduplication (the same job appearing on two different ATS platforms) was considered and intentionally excluded. Companies commit to a single ATS platform deeply integrated into their hiring workflow. The scenario where the same company posts the same role on both Greenhouse and Lever simultaneously is effectively zero in practice.
 
 ### Why Supabase over a flat file or local SQLite?
 
@@ -101,7 +124,7 @@ A flat file would only work if everything ran on the same computer, all the time
 
 ### Why vanilla JS for the Phase 1 dashboard?
 
-The Phase 1 dashboard does one thing: read a list of scored jobs from Supabase and display them. There is no state management problem here. There is no component reuse problem. There is no routing problem.
+The Phase 1 dashboard does one thing: read a list of scored jobs from Supabase and display them in two sections. There is no state management problem here. There is no component reuse problem. There is no routing problem.
 
 Adding React to solve a problem that doesn't exist yet is premature abstraction. Vanilla JS with a single `fetch()` call is the right tool for a read-only display with no interactivity beyond filtering.
 
@@ -117,20 +140,23 @@ For a personal project running once a day, this is the right level of infrastruc
 
 ## 🗂️ Phases
 
-### ✅ Phase 0 -  README
+### ✅ Phase 0 — README
 Written before any code. Covers the problem statement, architecture decisions, AI cost strategy, phase breakdown, and intentionality standard. Every decision in the codebase should be traceable back to something stated here.
 
 ### 🔨 Phase 1 — MVP (In Progress)
-- Fetcher modules for Greenhouse, Ashby, Lever, SmartRecruiters
-- Mistral scoring layer with structured JSON output
-- Supabase storage with a normalized `job_postings` table
-- Vanilla JS dashboard: title, company, source, score, reasons, apply link
-- GitHub Actions cron: runs daily, fetches → scores → stores
+- Fetcher modules for Greenhouse, Ashby, Lever, SmartRecruiters with broad keyword queries
+- Day-over-day deduplication using externalId before scoring
+- Mistral scoring layer: all fetched jobs scored, structured JSON output
+- Supabase storage: single table, all scored jobs stored regardless of score
+- Vanilla JS dashboard: two sections, Matched Jobs (score >= 75%) and All Jobs
+- GitHub Actions cron: runs daily, fetches → deduplicates → scores → stores
 
-Deliverable: a fully automated daily pipeline that surfaces matched jobs above 75% in a clean dashboard. Zero manual intervention required after setup.
+Deliverable: a fully automated daily pipeline that surfaces matched jobs above 75% in a clean dashboard while keeping all fetched jobs visible. Zero manual intervention required after setup.
 
 ### ⏳ Phase 2 — Enhanced Dashboard (Planned)
 - React/Vite dashboard with status tracking and application pipeline view
+- Resume upload flow: user uploads resume, scoring happens on demand in the browser
+- Multi-user support: resume baseline moves from static config into Supabase, tied to user records
 - Webhook trigger: marking a job "apply" fires the Anthropic API using a read-only mirror of the Aligned system prompt
 - Only built if the manual Aligned handoff becomes a real bottleneck in practice
 
@@ -157,7 +183,7 @@ Deliverable: a fully automated daily pipeline that surfaces matched jobs above 7
 
 **Industry standards, non-negotiable.** Strict TypeScript. Explicit error handling. Secrets in environment variables only. Separation of concerns. No silent failures.
 
-**Cost discipline.** Mistral free tier for scoring. Anthropic credits reserved for Phase 2. Token-tight prompts. Target monthly cost for Phase 1: $0.
+**Cost discipline.** Mistral free tier for scoring. Anthropic credits reserved for Phase 2. Token-tight prompts. Target monthly cost for Phase 1: effectively $0.
 
 **Boring is a compliment.** Proven tools over clever tools. The goal is a system that works reliably, not one that's interesting to explain.
 
