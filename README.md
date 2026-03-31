@@ -78,6 +78,10 @@ GitHub Actions (cron: daily)
        Two sections:
        ├── Matched Jobs (score >= 75)
        └── All Jobs (everything fetched today)
+        │
+        ▼
+   Automated Cleanup (GitHub Actions daily)
+   └── Deletes records older than 7 days
 ```
 
 ---
@@ -116,6 +120,18 @@ Every ATS platform assigns a unique ID to each job posting. Before scoring, the 
 
 Cross-platform deduplication (the same job appearing on two different ATS platforms) was considered and intentionally excluded. Companies commit to a single ATS platform deeply integrated into their hiring workflow. The scenario where the same company posts the same role on both Greenhouse and Lever simultaneously is effectively zero in practice.
 
+### Why NULL for missing location instead of a default string?
+
+When an ATS platform does not provide a location for a job posting, the value is stored as `NULL` in the database rather than a default string like `'unspecified'`. In relational databases, `NULL` has a precise meaning: the value is unknown or not applicable. An empty string means something different — the value is known and it is empty. Storing `NULL` for unknown values is semantically correct and follows standard database convention.
+
+The tradeoff is a small amount of null handling in the dashboard. A `null` location displays as "Unspecified" to the user. That handling is intentional and lives in one place. The database stays accurate, the display stays clean, and the distinction between "no location provided" and "remote" remains meaningful.
+
+### Why a 7-day automated data retention policy?
+
+Job postings have a natural expiry. Most roles are filled or closed within weeks. Keeping stale listings beyond 7 days adds noise to the dashboard and accumulates storage costs over time. A daily cleanup step in the GitHub Actions workflow deletes records older than 7 days automatically, requiring zero manual intervention.
+
+The 7-day window is intentional. It creates a natural forcing function to review matches regularly during an active search. If a listing has not been acted on within a week, it is no longer relevant. The retention window is a single configuration value and can be adjusted without touching any other part of the system.
+
 ### Why Supabase over a flat file or local SQLite?
 
 GitHub Actions is a machine in the cloud. It runs the fetch pipeline, scores the jobs, and shuts down. The dashboard is separate. It lives in a browser and needs to read that data whenever it's opened. They need a shared place to meet. Supabase is that shared place: GitHub Actions writes to it, the dashboard reads from it, and neither needs to be on the same machine at the same time.
@@ -140,21 +156,23 @@ For a personal project running once a day, this is the right level of infrastruc
 
 ## 🗂️ Phases
 
-### ✅ Phase 0 — README
+### ✅ Phase 0 - README
 Written before any code. Covers the problem statement, architecture decisions, AI cost strategy, phase breakdown, and intentionality standard. Every decision in the codebase should be traceable back to something stated here.
 
-### 🔨 Phase 1 — MVP (In Progress)
+### 🔨 Phase 1 - MVP (In Progress)
 - Fetcher modules for Greenhouse, Ashby, Lever, SmartRecruiters with broad keyword queries
 - Day-over-day deduplication using externalId before scoring
 - Mistral scoring layer: all fetched jobs scored, structured JSON output
 - Supabase storage: single table, all scored jobs stored regardless of score
 - Vanilla JS dashboard: two sections, Matched Jobs (score >= 75%) and All Jobs
-- GitHub Actions cron: runs daily, fetches → deduplicates → scores → stores
+- GitHub Actions cron: runs daily, fetches → deduplicates → scores → stores → cleans up records older than 7 days
 
 Deliverable: a fully automated daily pipeline that surfaces matched jobs above 75% in a clean dashboard while keeping all fetched jobs visible. Zero manual intervention required after setup.
 
 ### ⏳ Phase 2 — Enhanced Dashboard (Planned)
 - React/Vite dashboard with status tracking and application pipeline view
+- Per-job status tracking: New, Applied, Passed, Archived
+- Status-based data retention: applied jobs kept for 90 days for reference, passed jobs deleted after 7 days, archived jobs kept indefinitely
 - Resume upload flow: user uploads resume, scoring happens on demand in the browser
 - Multi-user support: resume baseline moves from static config into Supabase, tied to user records
 - Webhook trigger: marking a job "apply" fires the Anthropic API using a read-only mirror of the Aligned system prompt
@@ -187,7 +205,7 @@ Deliverable: a fully automated daily pipeline that surfaces matched jobs above 7
 
 **Boring is a compliment.** Proven tools over clever tools. The goal is a system that works reliably, not one that's interesting to explain.
 
-**Intentional Git history.** Commits follow the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) standard — `type(scope): description`. The commit log reads like a coherent build narrative, not a list of save points.
+**Intentional Git history.** Commits follow the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) standard - `type(scope): description`. The commit log reads like a coherent build narrative, not a list of save points.
 
 ---
 
