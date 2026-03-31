@@ -10,3 +10,7 @@ dist/
 
 # OS noise
 .DS_Store
+
+# Sensitive config files — never commit these
+config/resume-baseline.ts
+config/discovery.ts
