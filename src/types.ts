@@ -10,7 +10,7 @@ export interface JobPosting {
   externalId: string;
   title: string;
   company: string;
-  location: string;
+  location: string | null;
   description: string;
   applyUrl: string;
   source: JobSource;
