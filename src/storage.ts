@@ -52,3 +52,18 @@ export async function saveScoredJobs(jobs: ScoredJob[]): Promise<void> {
     throw new Error(`Failed to save scored jobs: ${error.message}`);
   }
 }
+// TODO(phase-2): add name validation when user onboarding flow is built.
+// Baseline is injected as the Mistral system prompt on every scoring call.
+export async function getResumeBaseline(email: string): Promise<string> {
+  const { data, error } = await supabase
+    .from("user_profiles")
+    .select("resume_baseline")
+    .eq("email", email)
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to fetch resume baseline: ${error.message}`);
+  }
+
+  return data.resume_baseline;
+}

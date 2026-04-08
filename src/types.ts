@@ -31,3 +31,13 @@ export interface ScoredJob extends JobPosting {
   gaps: string[];
   scoredAt: Date;
 }
+
+// Structured for per-user baselines to support multi-user in Phase 2.
+export interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  resumeBaseline: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
