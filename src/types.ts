@@ -6,6 +6,12 @@ export enum JobSource {
   SmartRecruiters = "smartrecruiters",
 }
 
+export enum CompanySource {
+  YCombinator = "yc",
+  VCPortfolio = "vc_portfolio",
+  Manual = "manual",
+}
+
 export interface JobPosting {
   externalId: string;
   title: string;
@@ -23,7 +29,7 @@ export interface MatchResult {
   gaps: string[];
 }
 
-// Extends JobPosting with Mistral scoring fields.
+
 // This is the final shape written to Supabase and read by the dashboard.
 export interface ScoredJob extends JobPosting {
   score: number;
@@ -40,4 +46,16 @@ export interface UserProfile {
   resumeBaseline: string;
   createdAt: Date;
   updatedAt: Date;
+}
+
+// atsPlatform and boardToken are null until ATS detection runs.
+export interface Company {
+  id: string;
+  name: string;
+  careersUrl: string;
+  atsPlatform: JobSource | null;
+  boardToken: string | null;
+  source: CompanySource;
+  discoveredAt: Date;
+  createdAt: Date;
 }
