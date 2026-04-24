@@ -66,6 +66,11 @@ GitHub Actions (every 3 days)
         ▼
    companies table (Supabase)
    └── name, careers_url, ats_platform, board_token, source, discovered_at
+        │
+        ▼
+   Immediate Fetch (same discovery run)
+   └── Newly discovered companies have their jobs fetched, scored, and stored
+       in the same workflow execution. No waiting for the next daily run.
 
 GitHub Actions (daily)
         │
@@ -120,6 +125,12 @@ The company-first approach solves both problems simultaneously. By discovering c
 VC firms have already done the vetting work. A company backed by a top-tier VC has been evaluated for team quality, market opportunity, and execution ability. That signal is valuable independent of any job posting. A portfolio page is a curated list of companies worth knowing about, updated as the firm makes new investments.
 
 The discovery sources were chosen to maximize coverage across target industries and geographies while including firms that back underrepresented founders, a signal for companies that tend to invest in culture and team quality. The specific sources are maintained in a gitignored config file and are not publicly documented.
+
+### Why newly discovered companies have their jobs fetched immediately?
+
+When the discovery workflow runs every 3 days and finds new companies, their jobs are fetched, scored, and stored in the same workflow execution rather than waiting for the next daily fetch. The point of discovering a company is to find roles worth applying to. Introducing a delay of up to 24 hours between discovery and availability in the dashboard creates unnecessary friction in an active job search.
+
+The cost impact is negligible. A newly discovered company has on average zero to one open QA roles. Scoring one extra job per new company adds a fraction of a cent to the monthly Mistral cost. The scraping cadence stays at every 3 days to remain respectful to VC portfolio pages. Only the fetch and score step runs immediately for new companies. Existing companies continue on the daily cadence unchanged.
 
 ### Why fetch from ATS platforms directly instead of using an aggregator?
 
@@ -215,7 +226,7 @@ Written before any code. Covers the problem statement, architecture decisions, A
 - Resume baseline stored in Supabase `user_profiles` table, fetched at runtime, never committed to the repo
 - Supabase storage: three tables (companies, scored_jobs, user_profiles), all scored jobs stored regardless of score
 - Vanilla JS dashboard: two sections, Matched Jobs (score >= 75%) and All Jobs
-- GitHub Actions: discovery workflow every 3 days, fetch workflow daily
+- GitHub Actions: discovery workflow every 3 days with immediate fetch for newly discovered companies, fetch workflow daily for all known companies
 - Automated cleanup: records older than 7 days deleted daily
 
 Deliverable: a fully automated pipeline that discovers companies worth working for, surfaces matched QA roles above 75% in a clean dashboard, and keeps all fetched jobs visible. Zero manual intervention required after setup.
@@ -234,7 +245,7 @@ Deliverable: a fully automated pipeline that discovers companies worth working f
 
 ## 🏢 Company Discovery Sources
 
-Company discovery runs every 3 days via GitHub Actions. New companies found in discovery sources are added to the registry automatically. Companies already in the registry are skipped during discovery. Their jobs are fetched daily by the separate fetch pipeline.
+Company discovery runs every 3 days via GitHub Actions. New companies found in discovery sources are added to the registry automatically. Companies already in the registry are skipped during discovery. Newly discovered companies have their jobs fetched, scored, and stored in the same workflow execution so they are available in the dashboard the same day they are found. All known companies have their jobs fetched daily by the separate fetch pipeline.
 
 The specific discovery sources, VC firms, manual additions, and exclusion filters are maintained in gitignored config files and are not publicly documented. This is intentional. The curation behind the discovery layer is the core IP of the system.
 
