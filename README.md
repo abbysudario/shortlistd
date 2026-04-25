@@ -49,12 +49,13 @@ GitHub Actions (every 3 days)
    Discovery Layer
    ├── Y Combinator API (structured JSON, no auth required)
    ├── Curated VC portfolio page scrapers (Cheerio, HTML parsing)
-   └── Manual additions (config/discovery.ts, gitignored)
+   └── Manual additions (config/discovery-sources.ts, gitignored)
         │
-        ▼ Company names + careers URLs
+        ▼ Company names + website URLs
         │
-   Industry Exclusion Filter
-   └── Drops companies matching excluded industries
+   Two-Layer Filtering
+   ├── YC companies: filtered by structured industry tags
+   └── VC portfolio companies: filtered by exact name blocklist
         │
         ▼
    ATS Detection (runs once per new company)
@@ -65,7 +66,7 @@ GitHub Actions (every 3 days)
         │
         ▼
    companies table (Supabase)
-   └── name, careers_url, ats_platform, board_token, source, discovered_at
+   └── name, website_url, ats_platform, board_token, source, discovered_at
         │
         ▼
    Immediate Fetch (same discovery run)
@@ -126,6 +127,20 @@ VC firms have already done the vetting work. A company backed by a top-tier VC h
 
 The discovery sources were chosen to maximize coverage across target industries and geographies while including firms that back underrepresented founders, a signal for companies that tend to invest in culture and team quality. The specific sources are maintained in a gitignored config file and are not publicly documented.
 
+### Why a two-layer filtering approach for company discovery?
+
+The original design used keyword matching against company names to exclude industries like defense. This was removed for two reasons. First, it was unreliable. A company name alone gives no reliable indication of its industry. Name-based filtering creates false positives and false negatives. Second, it was potentially discriminatory against companies with certain words in their names.
+
+The replacement is a two-layer approach matched to the data available at each source. Y Combinator companies have structured industry tags in their API response, and filtering against those tags is accurate and reliable. VC portfolio companies only expose a name and website URL when scraped. For those, an exact name blocklist in `config/discovery-sources.ts` allows intentional, deliberate exclusions without keyword inference.
+
+For both sources, the Mistral scoring layer provides a final safety net. A defense company's job description will score very low against a QA engineering resume baseline. It may appear in the All Jobs section of the dashboard but will never surface in Matched Jobs above the 75% threshold.
+
+### Why `websiteUrl` instead of `careersUrl` for discovered companies?
+
+At the point of discovery, what we have is the company's main website URL as listed on a VC portfolio page or in the YC API. This is not necessarily a direct link to their careers page. Naming it `careersUrl` implied precision that didn't exist. It suggested we had already found the careers page when we had only found the company's website.
+
+`websiteUrl` accurately describes what the field contains at the point of discovery. ATS detection in the next step visits this URL, follows it to the actual careers page, and identifies which ATS platform the company uses. The field name reflects reality at each stage of the pipeline rather than anticipating what it will become.
+
 ### Why newly discovered companies have their jobs fetched immediately?
 
 When the discovery workflow runs every 3 days and finds new companies, their jobs are fetched, scored, and stored in the same workflow execution rather than waiting for the next daily fetch. The point of discovering a company is to find roles worth applying to. Introducing a delay of up to 24 hours between discovery and availability in the dashboard creates unnecessary friction in an active job search.
@@ -152,7 +167,7 @@ Moving it to a `user_profiles` table in Supabase solves both problems. The basel
 
 ### Why are sensitive config files gitignored and never committed?
 
-`config/resume-baseline.ts` and `config/discovery.ts` contain information that should never be public: personal career details used for AI scoring and the curated discovery sources that represent the core IP of the system. Both files are gitignored and exist only locally and in GitHub Actions secrets at runtime.
+`config/resume-baseline.ts` and `config/discovery-sources.ts` contain information that should never be public: personal career details used for AI scoring and the curated discovery sources that represent the core IP of the system. Both files are gitignored and exist only locally and in GitHub Actions secrets at runtime.
 
 The discovery source list is the primary moat of Shortlistd. Keeping it out of the public repo protects that work while still allowing the architecture, types, and documented decisions to serve as a portfolio signal.
 
@@ -217,7 +232,7 @@ Written before any code. Covers the problem statement, architecture decisions, A
 
 ### 🔨 Phase 1 — MVP (In Progress)
 - Company discovery via Y Combinator API, curated VC portfolio page scrapers, and manual additions config
-- Industry exclusion filter (configurable, maintained in gitignored config)
+- Two-layer industry filtering: YC companies filtered by structured industry tags, VC portfolio companies filtered by exact name blocklist
 - ATS detection: identifies Greenhouse, Ashby, or Lever for each discovered company
 - Unknown ATS platforms flagged for manual review
 - Job fetching direct from company ATS APIs using stored board tokens
