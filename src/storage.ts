@@ -80,7 +80,7 @@ export async function getCompanies(): Promise<Company[]> {
   return (data ?? []).map((row) => ({
     id: row.id,
     name: row.name,
-    careersUrl: row.careers_url,
+    websiteUrl: row.website_url,
     atsPlatform: row.ats_platform as JobSource,
     boardToken: row.board_token,
     source: row.source as CompanySource,
@@ -97,7 +97,7 @@ export async function saveCompanies(
 
   const rows = companies.map((company) => ({
     name: company.name,
-    careers_url: company.careersUrl,
+    website_url: company.websiteUrl,
     ats_platform: company.atsPlatform,
     board_token: company.boardToken,
     source: company.source,

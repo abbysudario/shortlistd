@@ -13,4 +13,4 @@ dist/
 
 # Sensitive config files — never commit these
 config/resume-baseline.ts
-config/discovery.ts
+config/discovery-sources.ts

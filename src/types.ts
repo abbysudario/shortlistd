@@ -52,7 +52,7 @@ export interface UserProfile {
 export interface Company {
   id: string;
   name: string;
-  careersUrl: string;
+  websiteUrl: string;
   atsPlatform: JobSource | null;
   boardToken: string | null;
   source: CompanySource;
